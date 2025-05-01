@@ -1,0 +1,107 @@
+import React, { useState } from "react";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { RainbowKitProvider, getDefaultWallets } from "@rainbow-me/rainbowkit";
+import { WagmiConfig, createClient, configureChains } from "wagmi";
+import { ethers } from "ethers";
+
+// Konfigurasi chain dan wallet
+const { chains, provider } = configureChains(
+  [/* Daftar chain yang digunakan, seperti Ethereum mainnet atau testnet */],
+  [/* Penyedia RPC seperti Infura atau Alchemy */]
+);
+
+const { connectors } = getDefaultWallets({
+  appName: "Crypto Lottery",
+  chains,
+});
+
+const wagmiClient = createClient({
+  autoConnect: true,
+  connectors,
+  provider,
+});
+
+const lotteryAddress = "<contract_address>"; // Ganti dengan alamat kontrak yang sudah disebar
+
+function AddLottery() {
+  const { isConnected, address } = useAccount();
+  const { connect, disconnect } = useConnect();
+  const [ticketPrice, setTicketPrice] = useState("");
+  const [lotteryDuration, setLotteryDuration] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [lotteryToken, setLotteryToken] = useState(""); // Alamat token ERC20
+
+  const handleCreateLottery = async () => {
+    if (!isConnected) return alert("Please connect your wallet");
+
+    try {
+      setIsLoading(true);
+
+      // Koneksi dengan kontrak pintar
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const lotteryContract = new ethers.Contract(lotteryAddress, [
+        "function createLottery(uint256 _ticketPrice, uint256 _lotteryDuration, address _lotteryToken) external"
+      ], signer);
+
+      // Kirim transaksi untuk membuat lotere baru
+      const tx = await lotteryContract.createLottery(
+        ethers.utils.parseEther(ticketPrice),  // Mengonversi tiket harga ke wei
+        lotteryDuration,
+        lotteryToken || "0x0000000000000000000000000000000000000000" // Jika tidak ada token, gunakan 0x0 (ETH)
+      );
+
+      await tx.wait();
+
+      alert("Lottery created successfully!");
+    } catch (error) {
+      console.error("Error creating lottery:", error);
+      alert("Failed to create lottery.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <h1>Create New Lottery</h1>
+      
+      {!isConnected ? (
+        <button onClick={() => connect()}>Connect Wallet</button>
+      ) : (
+        <div>
+          <p>Connected with address: {address}</p>
+          <button onClick={() => disconnect()}>Disconnect</button>
+        </div>
+      )}
+
+      {isConnected && (
+        <div>
+          <input
+            type="text"
+            placeholder="Ticket Price (ETH)"
+            value={ticketPrice}
+            onChange={(e) => setTicketPrice(e.target.value)}
+          />
+          <input
+            type="number"
+            placeholder="Lottery Duration (seconds)"
+            value={lotteryDuration}
+            onChange={(e) => setLotteryDuration(e.target.value)}
+          />
+          <input
+            type="text"
+            placeholder="Lottery Token Address (optional)"
+            value={lotteryToken}
+            onChange={(e) => setLotteryToken(e.target.value)}
+          />
+          <button onClick={handleCreateLottery} disabled={isLoading}>
+            {isLoading ? "Creating..." : "Create Lottery"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default AddLottery;
